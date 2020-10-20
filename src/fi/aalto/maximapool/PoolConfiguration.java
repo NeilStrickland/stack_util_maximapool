@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
+import javax.servlet.ServletContext;
 
 /**
  * Stores all the configuration for how the PoolCoordingtor should work.
@@ -56,11 +57,19 @@ class PoolConfiguration {
 	 */
 	Map<String, ProcessConfiguration> processConfigurations = new LinkedHashMap<String, ProcessConfiguration>();
 
-	/**
+        ServletContext context = null;
+
+        PoolConfiguration(ServletContext context) {
+	    this.context = context;
+	}
+
+        /**
 	 * Update the configuration using any values in a set of properties.
 	 * @param properties the Properties to read.
 	 */
-	void loadProperties(Properties properties) {
+    void loadProperties(Properties properties,ServletContext context) {
+        	this.context = context;
+		context.log("Loading properties");
 		minimumAvailableProcesses = Integer.parseInt(properties.getProperty(
 				"size.min", "" + minimumAvailableProcesses));
 		maximumAvailableProcesses = Integer.parseInt(properties.getProperty(
@@ -73,6 +82,13 @@ class PoolConfiguration {
 				"adaptation.averages.length", "" + movingAverageDataPoints));
 		safetyMultiplier = Double.parseDouble(properties.getProperty(
 				"adaptation.safety.multiplier", "" + safetyMultiplier));
+		context.log("Loaded properties: " +
+			    minimumAvailableProcesses + ", " +
+			    maximumAvailableProcesses + ", " +
+			    startupLimit + ", " +
+			    maintenanceCycleTime + ", " +
+			    movingAverageDataPoints + ", " +
+			    safetyMultiplier);
 	}
 
 	/**
@@ -116,15 +132,19 @@ class PoolConfiguration {
 				properties.load(reader);
 				reader.close();
 			} catch (IOException ioe) {
+			        context.log("IO exception");
 				continue;
 			}
 
 			if (!subdirectory.getName().equals(properties.getProperty("name"))) {
+			        context.log("Name mismatch : " + subdirectory.getName() +
+					    " != " + properties.getProperty("name"));
 				continue;
 			}
 
 			ProcessConfiguration configuration = new ProcessConfiguration();
 			configuration.loadProperties(properties);
+			context.log("Adding configuration: " + subdirectory.getName());
 			configurations.put(subdirectory.getName(), configuration);
 		}
 

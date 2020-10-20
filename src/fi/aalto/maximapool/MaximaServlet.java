@@ -21,6 +21,7 @@ import java.util.concurrent.Semaphore;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -66,6 +67,10 @@ public class MaximaServlet extends HttpServlet {
 	public void init() throws ServletException {
 		super.init();
 
+		ServletContext context = getServletContext();
+
+		context.log("Maxima servlet init");
+		
 		servletStartTime = System.currentTimeMillis();
 
 		// Load properties.
@@ -83,15 +88,17 @@ public class MaximaServlet extends HttpServlet {
 		}
 
 		File directoryRoot = new File(properties.getProperty("directory.root", ""));
+		context.log("directory.root = " + directoryRoot.getPath());
 		if (!directoryRoot.isDirectory()) {
 			throw new ServletException("Configured directory.root (" +
 					directoryRoot.getPath() + ") does not exist.");
 		}
 
-		PoolConfiguration poolConfiguration = new PoolConfiguration();
+		PoolConfiguration poolConfiguration = new PoolConfiguration(context);
 		poolConfiguration.directoryRoot = directoryRoot;
 
 		File poolConf = new File(directoryRoot, "pool.conf");
+		context.log("pool configuration file = " + poolConf.getPath());
 		if (!poolConf.isFile()) {
 			throw new ServletException("Configuation file " +
 					poolConf.getPath() + " does not exist.");
@@ -106,13 +113,19 @@ public class MaximaServlet extends HttpServlet {
 					poolConf.getPath(), ioe);
 		}
 
-		poolConfiguration.loadProperties(properties);
+		poolConfiguration.loadProperties(properties,context);
+
+		if (poolConfiguration.context == null) {
+		    throw new ServletException("poolConfiguration.context = null");
+		}
+		
 		poolConfiguration.scanAvailableProcessConfigurations();
-		poolCoordinator = new PoolCoordinator(poolConfiguration);
+		poolCoordinator = new PoolCoordinator(poolConfiguration,context);
 
 		for (Map.Entry<String, ProcessConfiguration> entry :
 				poolConfiguration.processConfigurations.entrySet()) {
 			if (entry.getValue().autoStart) {
+			    context.log("Starting configuration : " + entry.getKey());
 				poolCoordinator.startConfiguration(entry.getKey());
 			}
 		}
@@ -128,9 +141,12 @@ public class MaximaServlet extends HttpServlet {
 	protected void doGet(HttpServletRequest request,
 			HttpServletResponse response) throws ServletException, IOException {
 
+	    ServletContext context = getServletContext();
+
 		try {
 			// Dispatch the request.
 			String healthcheck = request.getParameter("healthcheck");
+			context.log("Healthcheck parameter = " + healthcheck);
 			if ("1".equals(healthcheck)) {
 				doHealthcheckLowLevel(request, response);
 
@@ -364,7 +380,12 @@ public class MaximaServlet extends HttpServlet {
 	private void doHealthcheckHighLevel(HttpServletRequest request,
 			HttpServletResponse response) throws ServletException, IOException {
 
-		Writer out = HtmlUtils.startOutput(response, "high-level health-check");
+	    ServletContext context = request.getSession().getServletContext();
+
+	    context.log("Running high-level healthcheck for version = " +
+			request.getParameter("version"));
+	    
+	    Writer out = HtmlUtils.startOutput(response, "high-level health-check");
 
 		long startTime = System.currentTimeMillis();
 		MaximaProcess maximaProcess = poolCoordinator.makeProcess(request.getParameter("version"));
@@ -395,6 +416,10 @@ public class MaximaServlet extends HttpServlet {
 			HttpServletResponse response) throws ServletException, IOException {
 
 		String version = request.getParameter("version");
+		ServletContext context = request.getSession().getServletContext();
+
+		context.log("Running low-level healthcheck for version = " + version);
+
 		ProcessConfiguration processConfig = poolCoordinator.getProcessConfiguration(version);
 		if (processConfig == null) {
 			throw new RuntimeException("Cannot do a low-level health-check of an unknown version.");

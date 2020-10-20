@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
+import javax.servlet.ServletContext;
 
 import fi.aalto.utils.UpkeepThread;
 
@@ -21,6 +22,8 @@ import fi.aalto.utils.UpkeepThread;
  */
 public class PoolCoordinator implements UpkeepThread.Maintainable {
 
+        private ServletContext context = null;
+    
 	/**
 	 * The configuration for the set of pools as a whole.
 	 */
@@ -59,8 +62,8 @@ public class PoolCoordinator implements UpkeepThread.Maintainable {
 	 * @param poolConfig the configuration for the pool.
 	 * @param processConfig the configuration for the processes we create.
 	 */
-	PoolCoordinator(PoolConfiguration poolConfig) {
-
+    PoolCoordinator(PoolConfiguration poolConfig,ServletContext context) {
+         	this.context = context;
 		poolConfiguration = poolConfig;
 		startupThrottle = new Semaphore(poolConfiguration.startupLimit);
 
@@ -74,7 +77,9 @@ public class PoolCoordinator implements UpkeepThread.Maintainable {
 	 * @param configurationName the configuration to start.
 	 */
 	void startConfiguration(String configurationName) {
+	        context.log("Starting configuration : " + configurationName);
 		if (processPools.containsKey(configurationName)) {
+		        context.log("Configuration : " + configurationName + " already started");
 			return;
 		}
 
